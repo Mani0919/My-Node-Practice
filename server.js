@@ -10,6 +10,7 @@ const fs = require("fs");
 const PORT = 5000;
 const mongoose = require("mongoose");
 const verifyToken = require("./middleware/verifyToken");
+const EmailValidation=require("./middleware/validations")
 // Middleware
 app.use(express.json()); // Parses incoming JSON requests
 app.use(cors()); // Enables CORS
@@ -40,7 +41,7 @@ mongoose
 
 // Define a User Model
 const UserSchema = new mongoose.Schema({
-  username: String,
+  email: String,
   password: String,
 });
 const User = mongoose.model("User", UserSchema);
@@ -48,24 +49,24 @@ const User = mongoose.model("User", UserSchema);
 const ProfileSchema = new mongoose.Schema({
   profilepic: String,
   name: String,
-  age: String,
+  age: Number,
 });
 const Profile = mongoose.model("Profile", ProfileSchema);
 // Secret Key for JWT (Use environment variables in production)
 const SECRET_KEY = process.env.JWT_SECRET || "mysecretkey";
 
 // **Login API**
-app.post("/api/login", async (req, res) => {
-  const { username, password } = req.body;
-
-  const user = await User.findOne({ username });
+app.post("/api/login",EmailValidation, async (req, res) => {
+  const { email, password } = req.body;
+  console.log(email,password)
+  const user = await User.findOne({ email });
   if (!user) return res.status(400).json({ message: "User not found" });
 
   const isMatch = await bcrypt.compare(password, user.password);
   if (!isMatch) return res.status(401).json({ message: "Invalid credentials" });
 
   const token = jwt.sign(
-    { id: user._id, username: user.username },
+    { id: user._id, email: user.email },
     SECRET_KEY,
     { expiresIn: "1h" }
   );
@@ -73,14 +74,14 @@ app.post("/api/login", async (req, res) => {
 });
 
 app.post("/api/register", async (req, res) => {
-  const { username, password } = req.body;
+  const { email, password } = req.body;
   console.log(req.body);
-  if (!username || !password)
+  if (!email || !password)
     return res.status(400).json({ message: "All fields are required" });
 
   try {
     const hashedPassword = await bcrypt.hash(password, 10); // Hash password
-    const newUser = new User({ username, password: hashedPassword });
+    const newUser = new User({ email, password: hashedPassword });
     await newUser.save(); // Save user to MongoDB
 
     res.status(201).json({ message: "User registered successfully" });
@@ -229,6 +230,22 @@ app.delete("/api/delete/:id", verifyToken, async (req, res) => {
   }
 });
 
+//filter
+app.post("/api/filter", verifyToken, async (req, res) => {
+  try {
+    const { age } = req.body;
+    if (age === undefined) {
+      return res.status(400).json({ message: "Age field is required" });
+    }
+    const profiles = await Profile.find({ "age": { $gt: age } });
+    if (profiles.length === 0) {
+      return res.status(200).json({ message: "No profiles found", data: [] });
+    }
+    res.status(200).json({message:"second", date: profiles });
+  } catch (error) {
+    res.status(500).json({ message: "internal server error" });
+  }
+});
 // Start Server
 app.listen(PORT, () =>
   console.log(`Server running on http://localhost:${PORT}`)
