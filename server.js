@@ -9,6 +9,7 @@ const path = require("path");
 const fs = require("fs");
 const PORT = 5000;
 const mongoose = require("mongoose");
+const verifyToken=require("./middleware/verifyToken")
 // Middleware
 app.use(express.json()); // Parses incoming JSON requests
 app.use(cors()); // Enables CORS
@@ -73,6 +74,7 @@ app.post("/api/login", async (req, res) => {
 
 app.post("/api/register", async (req, res) => {
   const { username, password } = req.body;
+  console.log(req.body)
   if (!username || !password)
     return res.status(400).json({ message: "All fields are required" });
 
@@ -127,30 +129,38 @@ app.post("/api/upload", upload.single("profilepic"), async (req, res) => {
 
 app.get("/api/all", async (req, res) => {
   try {
-    const profiles = await Profile.find(); 
-    res.status(200).json({ message: "Data retrieved successfully", data: profiles });
+    const profiles = await Profile.find();
+    res
+      .status(200)
+      .json({ message: "Data retrieved successfully", data: profiles });
   } catch (error) {
     console.error("Error fetching data:", error);
     res.status(500).json({ message: "Internal Server Error" });
   }
 });
 
-// Middleware to verify JWT
-function verifyToken(req, res, next) {
-  const token = req.header("Authorization");
-  console.log(token);
-  if (!token) return res.status(403).json({ message: "Access denied" });
-
+app.get("/api/single/:id", async (req, res) => {
   try {
-    console.log("---", token.split(" ")[1]);
-    const verified = jwt.verify(token.split(" ")[1], SECRET_KEY);
-    console.log(verified);
-    req.user = verified;
-    next();
-  } catch (err) {
-    res.status(400).json({ message: "Invalid token" });
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Invalid ID format" });
+    }
+
+    const profile = await Profile.findById(id);
+
+    if (!profile) {
+      return res.status(404).json({ message: "Invalid ID" });
+    }
+
+    res.status(200).json({ message: "Profile fetched successfully", data: profile });
+
+  } catch (error) {
+    console.error("Error fetching data:", error);
+    res.status(500).json({ message: "Internal Server Error" });
   }
-}
+});
+
 
 // Start Server
 app.listen(PORT, () =>
