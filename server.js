@@ -10,7 +10,7 @@ const fs = require("fs");
 const PORT = 5000;
 const mongoose = require("mongoose");
 const verifyToken = require("./middleware/verifyToken");
-const EmailValidation=require("./middleware/validations")
+const EmailValidation = require("./middleware/validations");
 // Middleware
 app.use(express.json()); // Parses incoming JSON requests
 app.use(cors()); // Enables CORS
@@ -56,20 +56,18 @@ const Profile = mongoose.model("Profile", ProfileSchema);
 const SECRET_KEY = process.env.JWT_SECRET || "mysecretkey";
 
 // **Login API**
-app.post("/api/login",EmailValidation, async (req, res) => {
+app.post("/api/login", EmailValidation, async (req, res) => {
   const { email, password } = req.body;
-  console.log(email,password)
+  console.log(email, password);
   const user = await User.findOne({ email });
   if (!user) return res.status(400).json({ message: "User not found" });
 
   const isMatch = await bcrypt.compare(password, user.password);
   if (!isMatch) return res.status(401).json({ message: "Invalid credentials" });
 
-  const token = jwt.sign(
-    { id: user._id, email: user.email },
-    SECRET_KEY,
-    { expiresIn: "1h" }
-  );
+  const token = jwt.sign({ id: user._id, email: user.email }, SECRET_KEY, {
+    expiresIn: "1h",
+  });
   res.json({ message: "Login successful", token });
 });
 
@@ -237,15 +235,25 @@ app.post("/api/filter", verifyToken, async (req, res) => {
     if (age === undefined) {
       return res.status(400).json({ message: "Age field is required" });
     }
-    const profiles = await Profile.find({ "age": { $gt: age } });
+    const profiles = await Profile.find({ age: { $gt: age } });
     if (profiles.length === 0) {
       return res.status(200).json({ message: "No profiles found", data: [] });
     }
-    res.status(200).json({message:"second", date: profiles });
+    res.status(200).json({ message: "second", date: profiles });
   } catch (error) {
     res.status(500).json({ message: "internal server error" });
   }
 });
+
+app.get("/api/allusers",async(req,res)=>
+{
+  try {
+    const users=await User.find()
+    res.status(200).json({data:users})
+  } catch (error) {
+    res.status(500).json({message:"internal server error"})
+  }
+})
 // Start Server
 app.listen(PORT, () =>
   console.log(`Server running on http://localhost:${PORT}`)
