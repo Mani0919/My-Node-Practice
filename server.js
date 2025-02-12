@@ -9,7 +9,7 @@ const path = require("path");
 const fs = require("fs");
 const PORT = 5000;
 const mongoose = require("mongoose");
-const verifyToken=require("./middleware/verifyToken")
+const verifyToken = require("./middleware/verifyToken");
 // Middleware
 app.use(express.json()); // Parses incoming JSON requests
 app.use(cors()); // Enables CORS
@@ -74,7 +74,7 @@ app.post("/api/login", async (req, res) => {
 
 app.post("/api/register", async (req, res) => {
   const { username, password } = req.body;
-  console.log(req.body)
+  console.log(req.body);
   if (!username || !password)
     return res.status(400).json({ message: "All fields are required" });
 
@@ -92,42 +92,49 @@ app.post("/api/register", async (req, res) => {
 app.get("/api/profile", verifyToken, (req, res) => {
   res.json({ message: "Welcome to your profile!", user: req.user });
 });
-app.post("/api/upload", upload.single("profilepic"), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ message: "File is missing" });
+app.post(
+  "/api/upload",
+  verifyToken,
+  upload.single("profilepic"),
+  async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ message: "File is missing" });
+      }
+
+      const { name, age } = req.body;
+
+      // File size check (Max 10MB)
+      if (req.file.size > 10 * 1024 * 1024) {
+        fs.unlinkSync(req.file.path); // Delete large file
+        return res
+          .status(400)
+          .json({ message: "File should be less than 10MB" });
+      }
+
+      // Validate fields
+      if (!name || !age) {
+        fs.unlinkSync(req.file.path); // Delete file if fields are missing
+        return res.status(400).json({ message: "Fields are missing" });
+      }
+
+      // Save to MongoDB
+      const profile = new Profile({
+        profilepic: req.file.path.replace(/\\/g, "/"), // Store file path
+        name,
+        age,
+      });
+
+      await profile.save();
+      res.json({ message: "Profile saved successfully", profile });
+    } catch (error) {
+      console.error("Error:", error);
+      res.status(500).json({ message: "Internal Server Error" });
     }
-
-    const { name, age } = req.body;
-
-    // File size check (Max 10MB)
-    if (req.file.size > 10 * 1024 * 1024) {
-      fs.unlinkSync(req.file.path); // Delete large file
-      return res.status(400).json({ message: "File should be less than 10MB" });
-    }
-
-    // Validate fields
-    if (!name || !age) {
-      fs.unlinkSync(req.file.path); // Delete file if fields are missing
-      return res.status(400).json({ message: "Fields are missing" });
-    }
-
-    // Save to MongoDB
-    const profile = new Profile({
-      profilepic: req.file.path.replace(/\\/g, "/"), // Store file path
-      name,
-      age,
-    });
-
-    await profile.save();
-    res.json({ message: "Profile saved successfully", profile });
-  } catch (error) {
-    console.error("Error:", error);
-    res.status(500).json({ message: "Internal Server Error" });
   }
-});
+);
 
-app.get("/api/all", async (req, res) => {
+app.get("/api/all", verifyToken, async (req, res) => {
   try {
     const profiles = await Profile.find();
     res
@@ -139,7 +146,7 @@ app.get("/api/all", async (req, res) => {
   }
 });
 
-app.get("/api/single/:id", async (req, res) => {
+app.get("/api/single/:id", verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -153,14 +160,74 @@ app.get("/api/single/:id", async (req, res) => {
       return res.status(404).json({ message: "Invalid ID" });
     }
 
-    res.status(200).json({ message: "Profile fetched successfully", data: profile });
-
+    res
+      .status(200)
+      .json({ message: "Profile fetched successfully", data: profile });
   } catch (error) {
     console.error("Error fetching data:", error);
     res.status(500).json({ message: "Internal Server Error" });
   }
 });
 
+app.put(
+  "/api/update/:id",
+  verifyToken,
+  upload.single("profilepic"),
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { profilepic, name, age } = req.body;
+
+      console.log(profilepic, name, age);
+      // Validate ID format
+      if (!mongoose.Types.ObjectId.isValid(id)) {
+        return res.status(400).json({ message: "Invalid ID format" });
+      }
+
+      // Ensure request body is not empty
+      if (!profilepic && !name && !age) {
+        return res
+          .status(400)
+          .json({ message: "At least one field is required to update" });
+      }
+
+      // Find and update the profile
+      const profile = await Profile.findByIdAndUpdate(
+        id,
+        { $set: req.body }, // Use `$set` to update only provided fields
+        { new: true, runValidators: true }
+      );
+
+      // If profile does not exist
+      if (!profile) {
+        return res.status(404).json({ message: "Profile not found" });
+      }
+
+      res
+        .status(200)
+        .json({ message: "Profile updated successfully", data: profile });
+    } catch (error) {
+      console.error("Error updating profile:", error);
+      res.status(500).json({ message: "Internal Server Error" });
+    }
+  }
+);
+
+app.delete("/api/delete/:id", verifyToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Invalid ID format" });
+    }
+    const profile = await Profile.findByIdAndDelete(id);
+    if (!profile) {
+      return res.status(400).json({ message: "Id Invalid" });
+    }
+    res.status(200).json({ message: "Deleted" });
+  } catch (error) {
+    res.status(500).json({ message: "internal server error" });
+  }
+});
 
 // Start Server
 app.listen(PORT, () =>
