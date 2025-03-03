@@ -1,0 +1,35 @@
+<button id="rzp-button">Pay Now</button>
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<script>
+  document.getElementById("rzp-button").onclick = async function () {
+    const response = await fetch("http://localhost:5000/create-order", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ amount: 100, currency: "INR" }),
+    });
+
+    const order = await response.json();
+    console.log(order);
+    const options = {
+      key: "rzp_test_HsQvSfQkRqaNWN",
+      amount: order.order.amount,
+      currency: order.order.currency,
+      name: "Your Business Name",
+      description: "Test Transaction",
+      order_id: order.order.id,
+      handler: async function (response) {
+        const verifyRes = await fetch("http://localhost:5000/verify-payment", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(response),
+        });
+
+        const verifyData = await verifyRes.json();
+        alert(verifyData.message);
+      },
+    };
+
+    const rzp = new Razorpay(options);
+    rzp.open();
+  };
+</script>
